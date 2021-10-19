@@ -1,0 +1,667 @@
+---
+title: "Cyclistic bike-share Case Study"
+author: "David Mourlot"
+date: "4/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T,
+                      error=FALSE,
+                      message=FALSE,
+                      warning=FALSE,
+                      results='hide')
+```
+
+## Scenario
+In this case study, we will work for a fictional company, Cyclistic, pairing with different characters and team members in order to answer the key business questions. To that purpose, we will follow the steps of the data analysis process: **ask**, **prepare**, **process**, **analyze**, **share**, and **act** (as taught by the Google Data Analytics Professional Certificate in Coursera).
+
+Cyclistic is a bike-share company in Chicago. In 2016, Cyclistic launched a successful bike-share offering. Since then, the program has grown to a fleet of 5,824 bicycles that are geo-tracked and locked into a network of 692 stations across Chicago. The bikes can be unlocked from one station and returned to any other station in the system anytime.
+
+Cyclistic offers flexible pricing plans: single-ride passes, full-day passes, and annual memberships. Customers who purchase single-ride or full-day passes are referred to as *casual riders*. Customers who purchase annual memberships are Cyclistic *members*.
+
+### Business Goal
+Cyclistic’s finance analysts have concluded that annual members are much more profitable than casual riders. Director of marketing Lily Moreno believes that maximizing the number of annual members will be key to future growth. That is why she has set a clear goal: **Design marketing strategies aimed at converting casual riders into annual members**. 
+
+### Our Task
+Moreno and her team are interested in analyzing the Cyclistic historical bike trip data to identify trends. She has assigned us the first question to answer: **How do annual members and casual riders use Cyclistic bikes differently?**
+
+It is our task to produce a report with the following deliverables:
+
+* A description of all data sources used
+* Documentation of any cleaning or manipulation of data
+* A summary of our analysis
+* Supporting visualizations and key findings
+* Top recommendations based on our analysis
+
+## Data Description and Inspection
+We will be working with the the previous 12 months of Cyclistic trip data ; which can be downloaded [here.](https://divvy-tripdata.s3.amazonaws.com/index.html)^[Note: The data has been made available by Motivate International Inc. under this [license](https://www.divvybikes.com/data-license-agreement). The datasets have a different name because Cyclistic is a fictional company.] 
+
+Cyclistic trip data consists of four separate datasets in CSV format: 2019_Q2.csv, 2019_Q3.csv, 2019_Q4.csv, 2020_Q1.csv; containing bike-sharing records for the last three quarters (April-June, July-September and October-December) of 2019 and the first quarter (January-March) of 2020, respectively.
+
+For the purposes of this case study, we are asked to assume that the datasets are appropriate and will enable us to answer the business questions. In other words: data is considered to be *reliable*, *original*, *current* and *comprehensive* enough. 
+
+### Issues with data
+First thing we should note is that data-privacy issues prohibit us from using riders’ personally identifiable information, which means that we won’t be able to connect pass purchases to individual riders. In other words, *we can only make inferences about how Cyclistic services are used by groups (or subgroups), as a whole*.
+
+First, we loaded Cyclistic data into Excel spreadsheet software, we sorted and filtered it, and also made use of functions, in order to inspect it and find any potential issues. Here's what we found:
+
+* **Inconsistent column naming conventions:** 
+  + Data for the second quarter of 2019 is recorded under different column names from those of       the last two quarters of the same year.
+  + Also, beginning in 2020, Cyclistic adopted a new naming convention for the columns in its        bike-sharing records. 
+* **Columns present in some datasets but not in others:** 
+  + Columns "bikeid", "tripduration", "gender" and "birthyear" are present in the 2019_Q2-Q4         datasets, but not in the 2020_Q1 dataset. 
+  + Conversely, columns "rideable_type", "start_lat", "start_lng", "end_lat", "end_lng" (latitude     and longitude information for start and end stations) are present in the 2020_Q1                 dataset, but not in the 2019_Q2-Q4 datasets.
+* **Different formatting for the values in some columns:** 
+  + The "ride_id" column features eight-digit numbers in 2019_Q2-Q4 datasets, but                    sixteen-character-long alphanumerics in the 2020_Q1 dataset.
+  + In the "member_casual" column, there are two names for members ("member" and
+    "Subscriber") and two names for casual riders ("Customer" and "casual").
+* **Lots of missing data in "gender" and "birthyear" columns** (only for 2019_Q2-Q4 datasets).
+
+## Data cleaning and preparation^[Note: In cleaning and preparing this data we follow -though with a few modifications- the steps taken by Kevin Hartman on the Divvy case study 'Sophisticated, Clear, and Polished'.Divvy and Data Visualization" (found [here](https://artscience.blog/home/divvy-dataviz-case-study).))]
+
+The four Cyclistic datasets compose a fairly large body of data -over 3 million rows-, too large for processing in spreadsheet software. So, we turn to **R**...
+
+First, we load the required packages:
+
+* `tidyverse`, for data import and wrangling
+* `lubridate`, for date functions
+* `ggplot2`,  for visualization
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(tidyverse) #helps wrangle data
+library(lubridate) #helps wrangle date attributes
+library(ggplot2) #helps visualize data
+```
+
+### STEP 1: Load Cyclistic datasets
+
+Upload csv files.
+```{r error=FALSE, warning=FALSE,  message=FALSE}
+q2_2019 <- read_csv("Divvy_Trips_2019_Q2.csv", show_col_types = FALSE)
+q3_2019 <- read_csv("Divvy_Trips_2019_Q3.csv", show_col_types = FALSE)
+q4_2019 <- read_csv("Divvy_Trips_2019_Q4.csv", show_col_types = FALSE)
+q1_2020 <- read_csv("Divvy_Trips_2020_Q1.csv", show_col_types = FALSE)
+```
+
+### STEP 2: Wrangle data and combine into a single file
+
+Rename columns to make them consistent with q1_2020 (as this will be the supposed going-forward table design for Divvy). Column names need to match perfectly before we can use a command to join them into one file
+
+```{r error=FALSE, message=FALSE, warning=FALSE, results='hide'}
+(q4_2019 <- rename(q4_2019
+                   ,ride_id = trip_id
+                   ,rideable_type = bikeid
+                   ,started_at = start_time
+                   ,ended_at = end_time
+                   ,trip_duration = tripduration
+                   ,start_station_name = from_station_name
+                   ,start_station_id = from_station_id
+                   ,end_station_name = to_station_name
+                   ,end_station_id = to_station_id
+                   ,member_casual = usertype
+                   ,user_gender = gender
+                   ,birth_year = birthyear))
+
+(q3_2019 <- rename(q3_2019
+                   ,ride_id = trip_id
+                   ,rideable_type = bikeid
+                   ,started_at = start_time
+                   ,ended_at = end_time
+                   ,trip_duration = tripduration
+                   ,start_station_name = from_station_name
+                   ,start_station_id = from_station_id
+                   ,end_station_name = to_station_name
+                   ,end_station_id = to_station_id
+                   ,member_casual = usertype
+                   ,user_gender = gender
+                   ,birth_year = birthyear))
+
+(q2_2019 <- rename(q2_2019
+                   ,ride_id = "01 - Rental Details Rental ID"
+                   ,rideable_type = "01 - Rental Details Bike ID"
+                   ,started_at = "01 - Rental Details Local Start Time"
+                   ,ended_at = "01 - Rental Details Local End Time"
+                   ,trip_duration = "01 - Rental Details Duration In Seconds Uncapped"
+                   ,start_station_name = "03 - Rental Start Station Name"
+                   ,start_station_id = "03 - Rental Start Station ID"
+                   ,end_station_name = "02 - Rental End Station Name"
+                   ,end_station_id = "02 - Rental End Station ID"
+                   ,member_casual = "User Type"
+                   ,user_gender = "Member Gender"
+                   ,birth_year = "05 - Member Details Member Birthday Year"))
+```
+
+Add a "trip_duration" column (calculated in seconds)  to q1_2020, and convert it from Factor to numeric.
+
+```{r message=FALSE, warning=FALSE}
+q1_2020$trip_duration <- difftime(q1_2020$ended_at,q1_2020$started_at)
+q1_2020$trip_duration <- as.numeric(as.character(q1_2020$trip_duration))
+```
+
+Convert "ride_id" and "rideable_type" to character so that they can stack correctly.
+
+```{r}
+q4_2019 <- mutate(q4_2019, ride_id = as.character(ride_id),
+                  rideable_type = as.character(rideable_type))
+q3_2019 <- mutate(q3_2019, ride_id = as.character(ride_id),
+                  rideable_type = as.character(rideable_type))
+q2_2019 <- mutate(q2_2019, ride_id = as.character(ride_id),
+                  rideable_type = as.character(rideable_type))
+```
+
+Stack individual dataframes into one big dataframe.
+
+```{r}
+all_trips <- bind_rows(q2_2019, q3_2019, q4_2019, q1_2020)
+size(all_trips)
+```
+
+Remove latitude and longitude columns, since we wont be using them.
+
+```{r}
+all_trips <- all_trips %>%
+  select(-c(start_lat, start_lng, end_lat, end_lng))
+```
+
+NOTE: Since "gender" and "birthyear" information is no longer recorded by Cyclistic data team, starting in 2020, and since the two columns have lots of missing values, most people opt for removing them as well. However, we decided to keep them in hope that they might yield some insights. We'll explain our rationale in another section of this report.
+
+
+### STEP 4: Clean up and add necessary data for analysis
+
+Inspect the new dataframe that has been created
+
+```{r echo=TRUE}
+head(all_trips) #See the first 6 rows of data frame.
+tail(all_trips) #See the last 6 rows of data frame.
+str(all_trips) #See list of columns and data types (numeric, character, etc)
+summary(all_trips) #Statistical summary of data. Mainly for numeric columns
+```
+
+Look for inconsistent, bad or suspicious data
+
+```{r echo=TRUE}
+#Are there trips with a duration of less than 0 seconds? (Yes, there are)
+filter(select(all_trips, c(started_at,ended_at, trip_duration)), trip_duration < 0)
+#Are there trips with a duration of less than 1 minute? (Yes, there are)
+filter(select(all_trips, c(started_at,ended_at, trip_duration)), trip_duration < 60 & trip_duration > 0)
+#Are there trips with a duration greater than 24h? (Yes, there are)
+filter(select(all_trips, c(started_at,ended_at, trip_duration)), trip_duration > 86400)
+```
+
+Recode values in the "member_casual" column (we will go with the current 2020 labels: 'member' and 'casual')
+
+```{r}
+all_trips <- all_trips %>%
+  mutate(member_casual = recode(member_casual
+                                ,"Subscriber" = "member"
+                                ,"Customer" = "casual"))
+```
+
+See how many observations fall under each user type
+
+```{r echo=TRUE}
+table(all_trips$member_casual)
+```
+
+Add columns that list the date, month, day, and year of each (started) ride. This will allow us to aggregate ride data for each one of these levels. Before completing these operations we could only aggregate at the ride level.
+
+```{r}
+all_trips$date <- as.Date(all_trips$started_at) #The default format is yyyy-mm-dd
+all_trips$month <- format(as.Date(all_trips$date), "%m")
+all_trips$day <- format(as.Date(all_trips$date), "%d")
+all_trips$year <- format(as.Date(all_trips$date), "%Y")
+all_trips$day_of_week <- format(as.Date(all_trips$date), "%A")
+```
+
+Next, remove entries when bikes were taken out of docks and checked for quality. Also, remove or modify outliers: trip_duration negative or less than 1 minute, or greater than 24 (this cases are suspicious and, fortunately, rare: roughly 0.24% of total rows). 
+
+NOTE: We will create a new version of the dataframe (v2), since data is being removed.
+
+```{r}
+all_trips_v2 <- subset(all_trips, start_station_name != "HQ QR" 
+                       & trip_duration > 60
+                       & trip_duration < 86400)
+```
+
+Compute a "user_age" column...
+
+```{r}
+all_trips_v2 <- all_trips_v2 %>%
+  mutate(user_age =  as.numeric(year) - birth_year)
+```
+
+Then replace (hundreds of) instances with age greater than 100 year, since they are a little "too suspicious".
+```{r}
+all_trips_v2$user_age[all_trips_v2$user_age > 100] <- NA
+```
+
+Now we're good to go...
+
+## Analysis, visualizations and key findings
+Our analysis will be guided by both our business task: *Find out how do annual members and casual riders use Cyclistic bikes differently*, and the overall business goal: *Design marketing strategies aimed at converting casual riders into annual members*.
+
+We think we can help the marketing team by providing some insights regarding these areas:
+
+* **Audience understanding.** By (cautiously) using *gender* and *age* information we could help   them better understand which segments within the two user categories (*members* and *casual*)    are more active in the service. But also how do this segments differ from each other. This       could lead, in turn, to more accurate buyer personas or better tailored strategies.
+
+* **Service Use.** Which includes:
+  + Bike Use: How do *members* and *casual* costumers use the bike-sharing service differently?
+  + Station use: Which stations are more "popular" (or central) among *members* and *casual          users*, respectively? (This could be helpful, for example, in choosing which stations -or        geographic areas- are better for adds placement.)
+
+### Gender/Age information analysis
+
+As we mentioned elsewhere in this report, we only have *gender* and *age* information for the last three quarters of 2019 (starting in 2020, Cyclistic data team stopped recording this information). At the same time, even the records for 2019 have lots of missing values for these two columns. Therefore, we need to answer two questions:
+
+1. Despite these issues, is *gender* and *age* information still useful?
+2. What sort of predictions can it help us make?
+
+Our answer to the first question is affirmative. We were asked to assume that Cyclistic data is -among other things- *current*. In other words, we have no reason to believe the behavior of the different subgroups (male/female, young/old...) in 2019 was different from 2020; which means we can use 2019 data to make predictions about user behavior in 2020.
+
+As for the missing values, we don't see any evident pattern (bias) in their absence, and the records that do have *gender* and *age* information add up to nearly 2 million rows. This means we can safely assume we have a representative and large enough sample to work with. Of course, since we are dealing with a sample, we still have to estimate errors and confidence intervals for proportions and means.
+
+Regarding the second question, we need to keep in mind that, since we cannot relate each ride to the individual user who purchased it, we can only make inferences about a group's (or subgroup's) use of the bike-sharing service. That is, we cannot say that 70% of casual users are male; but instead that males (as a subgroup) are responsible for 70% of casual users' rides. 
+
+**STEP 1: LOOK FOR DIFFERENCES IN AGE**
+
+Install and load `DescTools` package, for confidence intervals calculations
+
+```{r echo = T, results= 'hide'}
+if(!require(DescTools)){install.packages("DescTools")}
+library("DescTools")
+```
+
+Compare members and casual users' age statistics
+
+```{r echo=TRUE}
+aggregate(all_trips_v2$user_age ~ all_trips_v2$member_casual, FUN = mean)
+aggregate(all_trips_v2$user_age ~ all_trips_v2$member_casual, FUN = median)
+aggregate(all_trips_v2$user_age ~ all_trips_v2$member_casual, FUN = max)
+aggregate(all_trips_v2$user_age ~ all_trips_v2$member_casual, FUN = min)
+```
+
+
+Compute confidence intervals for the means of both members and casual users' ages -at the 99% confidence level.
+
+```{r echo=TRUE}
+casual_ages <- filter(all_trips_v2, member_casual == 'casual' & user_age != "NA")$user_age
+MeanCI(casual_ages,
+       conf.level=0.99)
+member_ages <- filter(all_trips_v2, member_casual == 'member' & user_age != "NA")$user_age
+MeanCI(member_ages,
+       conf.level=0.99)
+```
+
+Plot histograms in order to observe age distributions among each user category
+
+First,  we plot the histogram for casual users.
+
+```{r echo=FALSE}
+all_trips_v2 %>%
+  filter(member_casual == "casual" & user_age != 'NA')%>%
+  ggplot(aes(x=user_age)) + 
+  geom_histogram(aes(y = stat(count) / sum(count)), binwidth = 10) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = "Casual users' ride distribution by age",
+    x = "Age (binwidth = 10)",
+    y = "Percentage of rides",
+    caption = "Percentage of rides purchased by casual users in each of the 10-year age bands"
+  )
+```
+
+Next, we plot the histogram for members.
+
+```{r echo=FALSE}
+all_trips_v2 %>%
+  filter(member_casual == "member" & user_age != 'NA')%>%
+  ggplot(aes(x=user_age)) + 
+  geom_histogram(aes(y = stat(count) / sum(count)), binwidth = 10) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = "Member's ride distribution by age",
+    x = "Age (binwidth = 10)",
+    y = "Percentage of rides",
+    caption = "Percentage of rides purchased by members in each of the 10-year age bands",
+  )
+```
+
+**Observations**
+
+* There are not great differences in mean or median age among members and casual users -4 to 5 years.
+* Confidence intervals are very small due to the large sample size.
+* For both members (49%) and casual users (44%) most rides are purchased by riders between 25 and 35 years old.
+* Interestingly, riders between 15 and 24 are twice more active (i.e purchase more than two times more rides) among casual users than among members.
+
+
+**STEP 2: LOOK FOR DIFFERENCES IN GENDER**
+
+Compute confidence intervals for both members and casual users' gender proportions -at the 99% confidence level-; then group estimates, as well as lower and upper confidence intervals in a single table (dataframe).
+
+```{r echo=TRUE}
+# compute male-female counts for members and casual users respectively
+gender_props <- all_trips_v2 %>%
+  filter(user_gender != "NA") %>%
+  group_by(member_casual, user_gender) %>%
+  summarise(count = n())
+
+
+# compute proportion estimates and confidence intervals for causal users
+casual_cis <- as.data.frame(BinomCI(gender_props$count[1:2],
+                      sum(gender_props$count[1:2]),
+                      conf.level = 0.99,
+                      method = "clopper-pearson")) #use most conservative method
+
+# compute proportion estimates and confidence intervals for members
+member_cis<- as.data.frame(BinomCI(gender_props$count[3:4],
+                                   sum(gender_props$count[3:4]),
+                                   conf.level = 0.99,
+                                   method = "clopper-pearson"))
+
+gender_cis <- rbind(casual_cis, member_cis) #merge into one dataframe
+
+# add relevant columns to our gender dataframe
+gender_props$prop_estimate <- gender_cis$est
+gender_props$lower_ci <- gender_cis$lwr.ci
+gender_props$upper_ci <- gender_cis$upr.ci
+gender_props
+```
+
+
+Finally, plot gender proportions for each user type, with error bars.
+
+```{r echo=FALSE}
+ggplot(gender_props, aes(x = member_casual, y = prop_estimate, fill = user_gender)) +
+  geom_col(position = "dodge") +
+  geom_errorbar(aes(ymin=lower_ci, ymax=upper_ci),
+                width=.2,                    # Width of the error bars
+                position=position_dodge(.9)) +
+  scale_fill_discrete(name="Gender") +
+  labs(
+    title = "Male-Female proportions by user type",
+    subtitle = "With error bars computed at a 99% confidence level",
+    x = "User Type",
+    y = "Percentage of rides",
+    caption = "Percentage of rides purchased by men and women within each user category",
+  )
+```
+
+**Observations**
+
+* Again, confidence intervals are very tight, due to the large sample size. Therefore, error bars are almost imperceptible.
+* For both members (74.3%) and casual users (61.7%) most rides are purchased by males.
+* Interestingly, female casual users are 12% more active (i.e purchase more rides) than female     members.
+
+### Bike use analysis
+
+First, compare members and casual users' trip duration.
+
+```{r echo=TRUE}
+aggregate(all_trips_v2$trip_duration ~ all_trips_v2$member_casual, FUN = mean)
+aggregate(all_trips_v2$trip_duration ~ all_trips_v2$member_casual, FUN = median)
+aggregate(all_trips_v2$trip_duration ~ all_trips_v2$member_casual, FUN = max)
+aggregate(all_trips_v2$trip_duration ~ all_trips_v2$member_casual, FUN = min)
+```
+
+Visualize distribution of rides by time of day for each user type.
+
+```{r echo=FALSE}
+all_trips_v2 %>%
+  mutate(time_of_day = hour(started_at) + minute(started_at)/60) %>%
+  ggplot(aes(x=time_of_day, fill = member_casual)) + 
+  geom_histogram(binwidth = 1) +
+  facet_wrap(~member_casual) +
+  scale_fill_discrete(name="User Type") +
+  labs(
+    title = "Ride distribution by time of day",
+    x = "Time of day\n(binwidth = 1 hour)",
+    y = "Number of rides",
+  )
+```
+
+
+Now, let's visualize the proportion of rides by user type and day of the week, and see if there are any differences.
+
+```{r echo=FALSE}
+rides_by_wday <- all_trips_v2 %>%
+  mutate(weekday = wday(started_at, label = TRUE)) %>%
+  group_by(member_casual, weekday) %>%
+  summarise(number_of_rides = n())
+
+rides_by_wday$proportions <- 0
+rides_by_wday$proportions[1:7] <- rides_by_wday$number_of_rides[1:7]/sum(rides_by_wday$number_of_rides[1:7])
+rides_by_wday$proportions[8:14] <- rides_by_wday$number_of_rides[8:14]/sum(rides_by_wday$number_of_rides[8:14])
+
+ggplot(data = rides_by_wday, aes(x = weekday, y = proportions, fill = member_casual)) +
+  geom_col(position = "dodge") +
+  facet_wrap(~member_casual) +
+  guides(fill= "none") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_discrete(name="User Type") +
+  labs(
+    title = "Rides by day of the week",
+    x = "Day of the Week",
+    y = "",
+  ) +
+  theme( # remove the vertical grid lines
+    panel.grid.major.x = element_blank() ,
+    # explicitly set the horizontal lines (or they will disappear too)
+    panel.grid.major.y = element_line( size= .05, color="white" ) 
+  )
+```
+
+Finally, let's visualize what percentage of their rides do members and casual users purchase each month. 
+```{r echo=FALSE}
+rides_by_month <- all_trips_v2%>%
+  group_by(member_casual, month) %>%
+  summarise(number_of_rides = n())
+
+rides_by_month$proportions <- 0
+rides_by_month$proportions[1:12] <- rides_by_month$number_of_rides[1:12]/sum(rides_by_month$number_of_rides[1:12])
+rides_by_month$proportions[13:24] <- rides_by_month$number_of_rides[13:24]/sum(rides_by_month$number_of_rides[13:24])
+
+ggplot(data = rides_by_month, aes(x = month, y = proportions, fill = member_casual)) +
+  geom_col(position = "dodge") +
+  facet_wrap(~member_casual) +
+  scale_y_continuous(labels = scales::percent) +
+  guides(fill= "none") +
+  labs(
+    title = "Rides by month",
+    x = "",
+    y = "",
+  ) +
+  scale_x_discrete(labels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")) +
+  theme( # remove the vertical grid lines
+    panel.grid.major.x = element_blank() ,
+    # explicitly set the horizontal lines (or they will disappear too)
+    panel.grid.major.y = element_line( size=.1, color="white" ) 
+  )
+
+```
+
+**Observations:**
+
+* Casual users' rides last, on average, 3 times more than member's rides! Even using a more        robust metric, like the median (less sensible to outliers), ride duration is two and a half      times longer for casual users. This is perhaps due to the fact that casual users purchase rides   for recreational purposes, while members use bikes as a means to go to work.
+* INTERESTING: Casual users purchase most of their rides on weekends (specially Saturdays); while   members are more active on work days (Monday-Friday).
+* INTERESTING: Looking at the number of rides by time of day, we see that casual users present a   quasi-normal distribution (slightly skewed left), with most rides occurring between 11:00 and    18:00 (and a mean around 15:00). Members, on the other hand, present a bi-modal distribution     with two well-defined peaks between 7:30-9:00 and 17:00-18:30.
+* Not surprisingly, both members and casual users prefer summer months (June-September) for        riding Cyclistic's bikes. However, the seasonality effect is much more evident among casual      users, with almost 70% of their rides occurring in these four months (compare to only 50%        among members). On the other end of the spectrum, months from November to February account for   only 6% of casual users' rides, but almost 19% of members' (three times more).
+
+NOTE: All these findings tend to support our theory that casual users purchase rides for recreational purposes, while members use bikes as a means to go to work.
+
+### Stations use analysis
+
+We will analyse members and casual users' station use by constructing two networks, with stations as nodes and the rides between them as (weighted) edges. Then we'll try to determine which stations are more "popular" (or central) among *members* and *casual users*, respectively. 
+
+For that, we will focus our analysis in three centrality measures:
+
+* **Strength:** The sum of all rides started and ended at each specific station, as a measure of how   visited/popular a station is.
+* **In-Degree:** Number of stations with rides ending at a specific station. A high in-degree          suggests the station is visited, not only by the people in it own vicinity, but also by people   of many DIFFERENT geographic areas.
+* **Betweenness:** Among other things, this measure is able to identify "boundary spanners": nodes     that act as bridges between two or more communities that otherwise would not be able to          communicate to each other. In our case, it could help us spot certain stations that although     not very "popular", may still be the link between two major geographic areas.
+
+At the end, we will compute a weighted sum of these three measures, and sort the stations by it. This should give us the X most important/central stations for members and casual users respectively.
+
+First, install and load the `igraph` library for graph (network) analysis
+```{r message=FALSE, warning=FALSE}
+#install.packages("igraph")
+library("igraph")
+```
+
+Create node list from station_id columns
+```{r}
+nodes <- as.data.frame(unique(c(unique(all_trips_v2$start_station_id),
+                                 unique(all_trips_v2$end_station_id))))
+names(nodes) <- c("station")
+nodes <- filter(nodes, station != 'NA') #remove NAs
+```
+ 
+Create edge list for casual users' rides only
+```{r}
+edges_casual <- all_trips_v2 %>%
+  filter(member_casual == 'casual') %>%
+  filter(start_station_id != 'NA' & end_station_id != 'NA') %>%
+  group_by(start_station_id, end_station_id) %>%
+  summarise(weight = n())
+```
+
+Use igraph package to create the directed graph (network) of casual users' station use
+```{r}
+casual_nw <- graph_from_data_frame(d = edges_casual, vertices = nodes, directed = TRUE)
+```
+
+Compute centrality measures:
+```{r}
+# Compute number of in and out rides as a rough measure of how "popular"/visited
+# each station is.
+casual_df <- nodes
+casual_df$popularity <- strength(casual_nw)
+# Normalize, so it doesn't over influence the weighted sum
+total_casual_rides <- length(filter(all_trips_v2, member_casual == 'casual')$ride_id)
+casual_df$popularity_norm <- casual_df$popularity/total_casual_rides
+
+# Compute (normalized) In-Degree
+casual_df$in_degree <- degree(casual_nw, mode="in", normalized = TRUE)
+# Compute (normalized) Betweenness
+casual_df$betweenness <- betweenness(casual_nw, normalized = TRUE)
+```
+
+Compute a weighted sum of the three metrics
+```{r}
+casual_df <- casual_df %>%
+  mutate(centrality = popularity_norm*0.45 + in_degree*0.35 + betweenness*0.2)
+```
+
+Take a peek at the created dataframe with computed centrality measures and weighted sum
+```{r echo=TRUE}
+casual_df[1:10,]
+```
+
+Next, we take the same steps to create a directed graph (network) of member's station use. Then we compute the same three centrality measures  and weighted sum for it.
+```{r include=FALSE}
+# Create edge list for members' rides
+edges_member <- all_trips_v2 %>%
+  filter(member_casual == 'member') %>%
+  group_by(start_station_id, end_station_id) %>%
+  filter(start_station_id != 'NA' & end_station_id != 'NA') %>%
+  summarise(weight = n())
+head(edges_member)
+
+# Use igraph package to create the graph (network) of members' station use
+member_nw <- graph_from_data_frame(d = edges_member, vertices = nodes, directed = TRUE)
+
+# Compute Centrality Measures
+member_df <- nodes
+member_df$popularity <- strength(member_nw)         # Compute number of in and out rides as a rough measure
+                                                    #  of how "popular"/visited each station is.
+# Normalize popularity
+total_member_rides <- length(filter(all_trips_v2, member_casual == 'member')$ride_id)
+member_df$popularity_norm <- member_df$popularity/total_member_rides 
+member_df$in_degree <- degree(member_nw, mode="in",
+                              normalized = TRUE)    # number of stations with rides TO a specific station
+member_df$betweenness <- betweenness(member_nw,
+                                     normalized = TRUE) # boundary spanners -bridges between two or more communities 
+                                                        # that otherwise would not be able to communicate to each other.
+# Compute a a weighted sum of the three metrics
+member_df <- member_df %>%
+  mutate(centrality = popularity_norm*0.45 + in_degree*0.35 + betweenness*0.2)
+
+```
+```{r echo=TRUE}
+member_df[1:10,]
+```
+
+Now we use bubble plots for visualizing both members and casual users' station use. We highlighted the top 15 central stations, based on our computed weighted sum. 
+
+```{r echo=FALSE}
+top_casual <- arrange(casual_df, desc(centrality))[1:15,]
+casual_df %>%
+  ggplot(aes(x = betweenness, y = in_degree, size = popularity)) +
+  geom_point(alpha=0.3) +
+  # Highlight Top central stations only
+  geom_point(data = top_casual,
+             aes(x = betweenness, y = in_degree, size = popularity),
+             color= 'red',
+             alpha=0.6) +
+  geom_text(data = top_casual,
+            aes(label=station),
+            hjust=0,
+            vjust=0,
+            alpha=0.8)+
+  labs(
+    title = "Most popular stations - Casual Users",
+    x = "Betweenness",
+    y = " In-Degree",
+  )
+  
+```
+
+```{r echo=FALSE}
+top_member <- arrange(member_df, desc(centrality))[1:15,]
+member_df %>%
+  ggplot(aes(x = betweenness, y = in_degree, size = popularity)) +
+  geom_point(alpha=0.3) +
+  # Highlight Top central stations only
+  geom_point(data = top_member,
+             aes(x = betweenness, y = in_degree, size = popularity),
+             color= 'green',
+             alpha=0.6) +
+  geom_text(data = top_member,
+            aes(label=station),
+            hjust=0,
+            vjust=0,
+            alpha=0.8)+
+  labs(
+    title = "Most popular stations - Members",
+    x = "Betweenness",
+    y = " In-Degree",
+  )
+```
+
+Print 15 most central stations for casual users
+```{r echo=TRUE}
+top_casual$station
+```
+
+Print 15 most central stations for members
+```{r echo=TRUE}
+top_member$station
+```
+
+Print overlapping stations (preferred by both members and casual users alike)
+```{r echo=TRUE}
+top_casual$station[top_casual$station %in% top_member$station]
+```
+
+**Observations**
+
+* We have devised a metric (weighted sum of three centrality measures) for determining the most    "popular"/central stations among members and casual users respectively.
+* When we look at the 15 most central stations for each user type, we notice an overlap of seven   stations preferred by members and casual users alike; but we also see there are a few that       are different (i.e. more central to one user type or the other). 
+
+## Recomendations
+
+Based on the key findings of our analysis and observations, we recommend Cyclistic's marketing team the following:
+
+* **Focus adds and messages mostly on young casual users aged 15-25**, who are very active in the   service (responsible for 32.5% of casual users' rides) and, equally important, will soon enter   the most active age band among members: ages 26-35.
+* **Pay attention to female casual users**, try to find why they are up to 12% more active than    female members. See if there are ways of engaging female casual users as members.
+* **Understand the nature of members and casual users' bike use.** We've shown that casual         riders' use of the bike-sharing service is considerably different from that of the members.     (Casual users take much longer trips on average; they prefer weekends -while members prefer      work days-; their ride hours are quasi-normally distributed, with most rides occurring between   11:00 and 18:00 -while members have two clear peak moments: 7:30-9:00 and 17:00-18:30-; 70% of   casual users' rides are concentrated in the months of June-September -compare to only 50% for          members-.) We suggest using this understanding to craft better messages and spot casual users with "member    potential" (or "memberly" behavior?).
+* **Use most central stations to physically place adds.** This may be a cost-effective way of maximizing the    impact of adds and messages.
