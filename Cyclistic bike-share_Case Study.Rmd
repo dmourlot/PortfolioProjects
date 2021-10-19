@@ -37,7 +37,7 @@ It is our task to produce a report with the following deliverables:
 ## Data Description and Inspection
 We will be working with the the previous 12 months of Cyclistic trip data ; which can be downloaded [here.](https://divvy-tripdata.s3.amazonaws.com/index.html)^[Note: The data has been made available by Motivate International Inc. under this [license](https://www.divvybikes.com/data-license-agreement). The datasets have a different name because Cyclistic is a fictional company.] 
 
-Cyclistic trip data consists of four separate datasets in CSV format: 2019_Q2.csv, 2019_Q3.csv, 2019_Q4.csv, 2020_Q1.csv; containing bike-sharing records for the last three quarters (April-June, July-September and October-December) of 2019 and the first quarter (January-March) of 2020, respectively.
+Once downloaded, Cyclistic trip data consists of four separate datasets in CSV format: 2019_Q2.csv, 2019_Q3.csv, 2019_Q4.csv, 2020_Q1.csv; containing bike-sharing records for the last three quarters (April-June, July-September and October-December) of 2019 and the first quarter (January-March) of 2020, respectively.
 
 For the purposes of this case study, we are asked to assume that the datasets are appropriate and will enable us to answer the business questions. In other words: data is considered to be *reliable*, *original*, *current* and *comprehensive* enough. 
 
